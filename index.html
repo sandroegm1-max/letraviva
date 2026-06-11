@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="description" content="Sopa de Letras con IA - Puzzles infinitos en español">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LetraViva">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <title>LetraViva – Sopa de Letras IA</title>
+  <style>
+    /* ── TOKENS ───────────────────────────────────────── */
+    :root {
+      --ink:       #1a1a2e;
+      --ink2:      #16213e;
+      --ink3:      #0f3460;
+      --gold:      #e94560;
+      --gold2:     #f5a623;
+      --cream:     #f7f5ef;
+      --cream2:    #ede9df;
+      --muted:     #8a8a9a;
+      --cell-size: min(38px, 9.5vw);
+      --radius:    12px;
+      --found-1:   #e94560cc;
+      --found-2:   #f5a623cc;
+      --found-3:   #0ea5e9cc;
+      --found-4:   #22c55ecc;
+      --found-5:   #a855f7cc;
+      --found-6:   #f97316cc;
+    }
+
+    /* ── RESET ────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--ink);
+      color: var(--cream);
+      display: flex;
+      flex-direction: column;
+      max-width: 430px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    /* ── SCREENS ──────────────────────────────────────── */
+    .screen {
+      display: none;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+    }
+    .screen.active { display: flex; }
+
+    /* ── HOME SCREEN ──────────────────────────────────── */
+    #screen-home {
+      background: linear-gradient(160deg, var(--ink) 0%, var(--ink3) 100%);
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1.5rem;
+      gap: 0;
+    }
+    .logo-area {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+    .logo-letters {
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+      margin-bottom: 0.75rem;
+    }
+    .logo-tile {
+      width: 44px; height: 44px;
+      background: var(--gold);
+      color: white;
+      font-size: 22px;
+      font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 8px;
+      letter-spacing: 0;
+    }
+    .logo-tile:nth-child(2) { background: var(--gold2); transform: translateY(-4px); }
+    .logo-tile:nth-child(4) { background: var(--found-3); transform: translateY(-4px); }
+    .logo-title {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--cream);
+    }
+    .logo-sub {
+      font-size: 0.8rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .daily-badge {
+      background: var(--gold);
+      color: white;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 1.5rem;
+    }
+
+    .topic-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.6rem;
+      align-self: flex-start;
+      width: 100%;
+    }
+    .topic-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      width: 100%;
+      margin-bottom: 1.2rem;
+    }
+    .topic-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--cream);
+      border-radius: var(--radius);
+      padding: 0.6rem 0.3rem;
+      font-size: 0.78rem;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .topic-btn:hover, .topic-btn.selected {
+      background: var(--gold);
+      border-color: var(--gold);
+      color: white;
+    }
+    .topic-icon { font-size: 1.3rem; }
+
+    .diff-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.6rem;
+      align-self: flex-start;
+      width: 100%;
+    }
+    .diff-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      width: 100%;
+      margin-bottom: 1.5rem;
+    }
+    .diff-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--cream);
+      border-radius: var(--radius);
+      padding: 0.5rem 0.3rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .diff-btn.selected { background: var(--ink3); border-color: var(--gold2); color: var(--gold2); }
+
+    .play-btn {
+      width: 100%;
+      background: var(--gold);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      padding: 1rem;
+      font-size: 1.05rem;
+      font-weight: 800;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .play-btn:active { transform: scale(0.98); opacity: 0.9; }
+
+    .stats-strip {
+      display: flex;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .stat-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .stat-num { font-size: 1.1rem; font-weight: 700; color: var(--cream); }
+
+    /* ── LOADING SCREEN ───────────────────────────────── */
+    #screen-loading {
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      text-align: center;
+    }
+    .spinner {
+      width: 48px; height: 48px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-size: 1.1rem; font-weight: 600; }
+    .loading-sub { font-size: 0.82rem; color: var(--muted); }
+
+    /* ── GAME SCREEN ──────────────────────────────────── */
+    #screen-game {
+      padding: 0;
+      background: var(--ink2);
+    }
+    .game-header {
+      background: var(--ink);
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      flex-shrink: 0;
+    }
+    .game-topic-badge {
+      background: var(--ink3);
+      color: var(--cream2);
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .timer-display {
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: var(--gold2);
+      font-variant-numeric: tabular-nums;
+    }
+    .back-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 1.4rem;
+      line-height: 1;
+      padding: 4px;
+    }
+
+    .words-strip {
+      background: var(--ink);
+      padding: 0.5rem 0.75rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      max-height: 90px;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    .word-chip {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.07);
+      color: var(--cream2);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      transition: all 0.3s;
+    }
+    .word-chip.found {
+      color: white;
+      text-decoration: line-through;
+      opacity: 0.55;
+    }
+    .word-chip.found-0 { background: var(--found-1); }
+    .word-chip.found-1 { background: var(--found-2); }
+    .word-chip.found-2 { background: var(--found-3); }
+    .word-chip.found-3 { background: var(--found-4); }
+    .word-chip.found-4 { background: var(--found-5); }
+    .word-chip.found-5 { background: var(--found-6); }
+
+    .grid-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 0.5rem;
+    }
+    .letter-grid {
+      display: grid;
+      gap: 2px;
+      user-select: none;
+      touch-action: none;
+    }
+    .grid-cell {
+      width: var(--cell-size);
+      height: var(--cell-size);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: calc(var(--cell-size) * 0.46);
+      font-weight: 700;
+      color: var(--cream);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.04);
+      cursor: pointer;
+      transition: background 0.1s;
+      position: relative;
+    }
+    .grid-cell.selecting {
+      background: rgba(233,69,96,0.4);
+      color: white;
+    }
+    .grid-cell.found-color-0 { background: var(--found-1); color: white; }
+    .grid-cell.found-color-1 { background: var(--found-2); color: white; }
+    .grid-cell.found-color-2 { background: var(--found-3); color: white; }
+    .grid-cell.found-color-3 { background: var(--found-4); color: white; }
+    .grid-cell.found-color-4 { background: var(--found-5); color: white; }
+    .grid-cell.found-color-5 { background: var(--found-6); color: white; }
+
+    .progress-bar-wrap {
+      padding: 0 1rem 0.5rem;
+      flex-shrink: 0;
+    }
+    .progress-bar {
+      height: 4px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--gold);
+      border-radius: 2px;
+      transition: width 0.4s ease;
+    }
+
+    /* ── WIN SCREEN ───────────────────────────────────── */
+    #screen-win {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+      gap: 1.2rem;
+      background: linear-gradient(160deg, var(--ink) 0%, var(--ink3) 100%);
+    }
+    .win-emoji { font-size: 4rem; }
+    .win-title { font-size: 2rem; font-weight: 900; }
+    .win-sub { color: var(--muted); font-size: 0.9rem; }
+    .win-time { font-size: 1.5rem; font-weight: 800; color: var(--gold2); }
+    .win-stars { font-size: 2rem; letter-spacing: 4px; }
+    .win-actions { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+    .btn-secondary {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: var(--cream);
+      border-radius: var(--radius);
+      padding: 0.85rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    /* ── TOAST ────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: 80px;
+      left: 50%; transform: translateX(-50%);
+      background: var(--gold);
+      color: white;
+      padding: 10px 24px;
+      border-radius: 30px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      white-space: nowrap;
+      z-index: 999;
+    }
+    .toast.show { opacity: 1; }
+
+    /* ── ERROR SCREEN ─────────────────────────────────── */
+    #screen-error {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+      gap: 1rem;
+    }
+    .error-icon { font-size: 3rem; }
+    .error-title { font-size: 1.3rem; font-weight: 700; }
+    .error-msg { color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
+    .error-key-hint {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: var(--radius);
+      padding: 1rem;
+      font-size: 0.8rem;
+      color: var(--cream2);
+      line-height: 1.6;
+      text-align: left;
+      width: 100%;
+    }
+    .error-key-hint code {
+      background: rgba(255,255,255,0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+    }
+
+    /* ── AD PLACEHOLDER ───────────────────────────────── */
+    .ad-placeholder {
+      background: rgba(255,255,255,0.03);
+      border: 1px dashed rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 0.5rem;
+      text-align: center;
+      font-size: 0.65rem;
+      color: var(--muted);
+      flex-shrink: 0;
+      margin: 0 0.75rem 0.4rem;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── HOME ──────────────────────────────────────────── -->
+<div id="screen-home" class="screen active">
+  <div class="logo-area">
+    <div class="logo-letters">
+      <div class="logo-tile">L</div>
+      <div class="logo-tile">E</div>
+      <div class="logo-tile">T</div>
+      <div class="logo-tile">R</div>
+      <div class="logo-tile">A</div>
+    </div>
+    <div class="logo-title">LetraViva</div>
+    <div class="logo-sub">Sopa de Letras con IA</div>
+  </div>
+
+  <div class="daily-badge" id="daily-badge">🗓 Puzzle del día</div>
+
+  <div class="topic-label">Elige un tema</div>
+  <div class="topic-grid" id="topic-grid">
+    <button class="topic-btn selected" data-topic="Fútbol">
+      <span class="topic-icon">⚽</span>Fútbol
+    </button>
+    <button class="topic-btn" data-topic="Gastronomía Peruana">
+      <span class="topic-icon">🍲</span>Gastronomía
+    </button>
+    <button class="topic-btn" data-topic="Animales">
+      <span class="topic-icon">🐆</span>Animales
+    </button>
+    <button class="topic-btn" data-topic="Historia del Perú">
+      <span class="topic-icon">🏛</span>Historia
+    </button>
+    <button class="topic-btn" data-topic="Ciencia">
+      <span class="topic-icon">🔬</span>Ciencia
+    </button>
+    <button class="topic-btn" data-topic="Música">
+      <span class="topic-icon">🎵</span>Música
+    </button>
+  </div>
+
+  <div class="diff-label">Dificultad</div>
+  <div class="diff-row" id="diff-row">
+    <button class="diff-btn selected" data-diff="Fácil">Fácil</button>
+    <button class="diff-btn" data-diff="Medio">Medio</button>
+    <button class="diff-btn" data-diff="Difícil">Difícil</button>
+  </div>
+
+  <button class="play-btn" id="play-btn">▶ Generar Puzzle</button>
+
+  <div class="stats-strip">
+    <div class="stat-item">
+      <span class="stat-num" id="stat-jugados">0</span>
+      <span>jugados</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-num" id="stat-completados">0</span>
+      <span>completados</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-num" id="stat-racha">0</span>
+      <span>racha</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── LOADING ────────────────────────────────────────── -->
+<div id="screen-loading" class="screen">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-text">Generando puzzle con IA...</div>
+  <div class="loading-sub" id="loading-sub">Buscando palabras sobre Fútbol</div>
+</div>
+
+<!-- ── GAME ───────────────────────────────────────────── -->
+<div id="screen-game" class="screen">
+  <div class="game-header">
+    <button class="back-btn" id="back-btn" aria-label="Volver">‹</button>
+    <span class="game-topic-badge" id="game-topic-badge">Fútbol</span>
+    <span class="timer-display" id="timer-display">0:00</span>
+  </div>
+  <div class="words-strip" id="words-strip"></div>
+  <div class="grid-wrapper">
+    <div class="letter-grid" id="letter-grid"></div>
+  </div>
+  <div class="progress-bar-wrap">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+  </div>
+  <div class="ad-placeholder">Publicidad · AdSense aquí</div>
+</div>
+
+<!-- ── WIN ────────────────────────────────────────────── -->
+<div id="screen-win" class="screen">
+  <div class="win-emoji">🎉</div>
+  <div class="win-stars" id="win-stars">⭐⭐⭐</div>
+  <div class="win-title">¡Completado!</div>
+  <div class="win-time" id="win-time">1:23</div>
+  <div class="win-sub" id="win-sub">Tema: Fútbol · Dificultad: Fácil</div>
+  <div class="win-actions">
+    <button class="play-btn" id="play-again-btn">▶ Nuevo Puzzle</button>
+    <button class="btn-secondary" id="share-btn">⬆ Compartir resultado</button>
+    <button class="btn-secondary" id="home-btn">🏠 Inicio</button>
+  </div>
+</div>
+
+<!-- ── ERROR ──────────────────────────────────────────── -->
+<div id="screen-error" class="screen">
+  <div class="error-icon">⚠️</div>
+  <div class="error-title">No se pudo generar el puzzle</div>
+  <div class="error-msg" id="error-msg">Ocurrió un error al conectar con la IA.</div>
+  <div class="error-key-hint" id="error-key-hint">
+    <strong>Para activar la IA:</strong><br>
+    Abre <code>config.js</code> e ingresa tu API Key de Anthropic.<br>
+    Obtén una gratis en <code>console.anthropic.com</code>
+  </div>
+  <button class="play-btn" id="error-retry-btn">↺ Intentar de nuevo</button>
+  <button class="btn-secondary" id="error-home-btn">🏠 Inicio</button>
+</div>
+
+<!-- ── TOAST ──────────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
+<script src="config.js"></script>
+<script src="puzzle-engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
