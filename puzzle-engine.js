@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════
-//  LetraViva – Motor de Puzzle
-//  Genera el tablero de sopa de letras con palabras de la IA
+//  LetraViva – Motor de Puzzle (versión segura)
+//  Ahora llama a /api/generate-words (tu servidor en Vercel)
+//  en lugar de exponer la clave en el navegador.
 // ═══════════════════════════════════════════════════════════
 
 const PuzzleEngine = (() => {
@@ -12,7 +13,6 @@ const PuzzleEngine = (() => {
   ];
 
   // ── NORMALIZA TEXTO ──────────────────────────────────────
-  // Quita tildes, ñ → N, convierte a mayúsculas
   function normalize(str) {
     return str
       .toUpperCase()
@@ -41,7 +41,6 @@ const PuzzleEngine = (() => {
 
       if (endR < 0 || endR >= size || endC < 0 || endC >= size) continue;
 
-      // Verifica que no haya conflictos
       let ok = true;
       for (let i = 0; i < w.length; i++) {
         const r = startR + dr * i;
@@ -60,7 +59,7 @@ const PuzzleEngine = (() => {
         return positions;
       }
     }
-    return null; // No se pudo colocar
+    return null;
   }
 
   // ── RELLENA CASILLAS VACÍAS ──────────────────────────────
@@ -72,50 +71,31 @@ const PuzzleEngine = (() => {
           grid[r][c] = LETTERS[Math.floor(Math.random() * LETTERS.length)];
   }
 
-  // ── API: GENERA PALABRAS CON IA ──────────────────────────
+  // ── LLAMA A TU SERVIDOR EN VERCEL (no expone la clave) ───
   async function fetchWordsFromAI(topic, difficulty) {
     const cfg = CONFIG.DIFFICULTY[difficulty];
-    const prompt = `Genera exactamente ${cfg.words} palabras en ESPAÑOL relacionadas con el tema "${topic}".
-Reglas ESTRICTAS:
-- Cada palabra debe tener entre ${cfg.minLen} y ${cfg.maxLen} caracteres
-- Solo letras del alfabeto español (sin números, guiones ni espacios)
-- Palabras reales y conocidas, no inventadas
-- Responde ÚNICAMENTE con un array JSON sin explicaciones ni texto adicional
-- Formato exacto: ["PALABRA1","PALABRA2","PALABRA3",...]
-- Todo en MAYÚSCULAS`;
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("/api/generate-words", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": CONFIG.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: CONFIG.AI_MODEL,
-        max_tokens: 300,
-        messages: [{ role: "user", content: prompt }]
+        topic,
+        words: cfg.words,
+        minLen: cfg.minLen,
+        maxLen: cfg.maxLen
       })
     });
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.error?.message || `Error HTTP ${response.status}`);
+      throw new Error(err.error || `Error HTTP ${response.status}`);
     }
 
     const data = await response.json();
-    const text = data.content[0].text.trim();
+    if (!Array.isArray(data.words) || data.words.length === 0)
+      throw new Error("No se recibieron palabras del servidor");
 
-    // Extrae el array JSON de la respuesta
-    const match = text.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error("La IA no devolvió un array válido");
-
-    const words = JSON.parse(match[0]);
-    if (!Array.isArray(words) || words.length === 0)
-      throw new Error("Array de palabras vacío");
-
-    return words.map(w => String(w).replace(/[^a-záéíóúñüA-ZÁÉÍÓÚÑÜ]/g, ""));
+    return data.words.map(w => String(w).replace(/[^a-záéíóúñüA-ZÁÉÍÓÚÑÜ]/g, ""));
   }
 
   // ── API PÚBLICA: CONSTRUYE EL PUZZLE COMPLETO ────────────
@@ -126,7 +106,6 @@ Reglas ESTRICTAS:
     const grid = emptyGrid(cfg.gridSize);
     const placed = [];
 
-    // Mezcla para priorizar aleatoriamente
     const shuffled = [...words].sort(() => Math.random() - 0.5);
 
     for (const word of shuffled) {
