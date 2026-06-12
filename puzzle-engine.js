@@ -1,12 +1,12 @@
 // ═══════════════════════════════════════════════════════════
-//  LetraViva – Motor de Puzzle (versión segura)
-//  Ahora llama a /api/generate-words (tu servidor en Vercel)
-//  en lugar de exponer la clave en el navegador.
+//  LetraViva – Motor de Puzzle · v2
+//  Mejoras: memoria de palabras usadas (anti-repetición) y
+//  verificación final del tablero (cada palabra debe estar
+//  completa y encontrable, letra por letra).
 // ═══════════════════════════════════════════════════════════
 
 const PuzzleEngine = (() => {
 
-  // Todas las direcciones posibles (horizontal, vertical, diagonal)
   const DIRS = [
     [0,1],[0,-1],[1,0],[-1,0],
     [1,1],[1,-1],[-1,1],[-1,-1]
@@ -22,6 +22,24 @@ const PuzzleEngine = (() => {
       .replace(/[^A-Z]/g, "");
   }
 
+  // ── HISTORIAL DE PALABRAS USADAS (anti-repetición) ───────
+  function getUsedWords(topic) {
+    try {
+      const all = JSON.parse(localStorage.getItem("letraviva_used") || "{}");
+      return all[topic] || [];
+    } catch(e) { return []; }
+  }
+
+  function saveUsedWords(topic, newWords) {
+    try {
+      const all = JSON.parse(localStorage.getItem("letraviva_used") || "{}");
+      const prev = all[topic] || [];
+      // Guarda las últimas 40 palabras por tema
+      all[topic] = [...newWords, ...prev].slice(0, 40);
+      localStorage.setItem("letraviva_used", JSON.stringify(all));
+    } catch(e) {}
+  }
+
   // ── GENERA TABLERO VACÍO ─────────────────────────────────
   function emptyGrid(size) {
     return Array.from({ length: size }, () => Array(size).fill(null));
@@ -32,7 +50,7 @@ const PuzzleEngine = (() => {
     const w = normalize(word);
     const shuffledDirs = [...DIRS].sort(() => Math.random() - 0.5);
 
-    for (let attempt = 0; attempt < 60; attempt++) {
+    for (let attempt = 0; attempt < 80; attempt++) {
       const [dr, dc] = shuffledDirs[attempt % shuffledDirs.length];
       const startR = Math.floor(Math.random() * size);
       const startC = Math.floor(Math.random() * size);
@@ -63,7 +81,7 @@ const PuzzleEngine = (() => {
   }
 
   // ── RELLENA CASILLAS VACÍAS ──────────────────────────────
-  const LETTERS = "ABCDEFGHIJKLMNOPRSTUVWYZ";
+  const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   function fillRandom(grid) {
     for (let r = 0; r < grid.length; r++)
       for (let c = 0; c < grid[r].length; c++)
@@ -71,9 +89,23 @@ const PuzzleEngine = (() => {
           grid[r][c] = LETTERS[Math.floor(Math.random() * LETTERS.length)];
   }
 
-  // ── LLAMA A TU SERVIDOR EN VERCEL (no expone la clave) ───
+  // ── VERIFICACIÓN FINAL ───────────────────────────────────
+  // Relee el tablero y confirma que cada palabra colocada
+  // realmente está completa, letra por letra, en sus posiciones.
+  function verifyPlacement(grid, placedWord) {
+    const { normalized, positions } = placedWord;
+    if (positions.length !== normalized.length) return false;
+    for (let i = 0; i < normalized.length; i++) {
+      const [r, c] = positions[i];
+      if (!grid[r] || grid[r][c] !== normalized[i]) return false;
+    }
+    return true;
+  }
+
+  // ── LLAMA AL SERVIDOR (con lista de exclusión) ───────────
   async function fetchWordsFromAI(topic, difficulty) {
     const cfg = CONFIG.DIFFICULTY[difficulty];
+    const exclude = getUsedWords(topic);
 
     const response = await fetch("/api/generate-words", {
       method: "POST",
@@ -82,7 +114,8 @@ const PuzzleEngine = (() => {
         topic,
         words: cfg.words,
         minLen: cfg.minLen,
-        maxLen: cfg.maxLen
+        maxLen: cfg.maxLen,
+        exclude
       })
     });
 
@@ -110,7 +143,7 @@ const PuzzleEngine = (() => {
 
     for (const word of shuffled) {
       const normalized = normalize(word);
-      if (normalized.length < cfg.minLen || normalized.length > cfg.maxLen + 2) continue;
+      if (normalized.length < cfg.minLen || normalized.length > cfg.maxLen) continue;
       const positions = placeWord(grid, normalized, cfg.gridSize);
       if (positions) {
         placed.push({
@@ -126,9 +159,16 @@ const PuzzleEngine = (() => {
 
     fillRandom(grid);
 
+    // ── VERIFICACIÓN FINAL: descarta cualquier palabra rota ──
+    const verified = placed.filter(p => verifyPlacement(grid, p));
+    if (verified.length < 3) throw new Error("Error de verificación del tablero. Intenta de nuevo.");
+
+    // Guarda las palabras usadas para no repetirlas pronto
+    saveUsedWords(topic, verified.map(p => p.original));
+
     return {
       grid,
-      words: placed,
+      words: verified,
       size: cfg.gridSize,
       topic,
       difficulty
